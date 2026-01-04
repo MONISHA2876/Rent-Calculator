@@ -5,9 +5,11 @@ import { useState } from "react";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { AddOn } from "@/types/types";
 import { InvoiceCard } from "@/components/InvoiceCard";
+import * as SecureStore from 'expo-secure-store';
+import PreviousInvoices from "@/components/PreviousInvoices";
 
 export default function RentCalculator() {
-  const { name, rent, dateOfCommencement, advance, security, avatarUrl }= useLocalSearchParams();
+  const { name, rent, advance, security, avatarUrl }= useLocalSearchParams();
   const [pending, setpending] = useState<number>(0);
   const [rentAmt, setRentAmt] = useState(Number(rent));
   const tenant = {
@@ -41,7 +43,6 @@ export default function RentCalculator() {
   const [pendingDescription, setPendingDescription] = useState('');
   const [receivedAmount, setReceivedAmount] = useState('');
   const [calculatedInvoice, setCalculatedInvoice] = useState<any>(null);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const addAddOn = () => {
     const newAddOn: AddOn = {
@@ -75,7 +76,7 @@ export default function RentCalculator() {
       pending;
 
     const invoice = {
-      tenantId: 'tenant1',
+      tenantName: name,
       date: `${date}/${month}/${year}`,
       rent: rentAmt,
       electricityReading: unitsConsumed ? parseFloat(unitsConsumed) : undefined,
@@ -89,8 +90,8 @@ export default function RentCalculator() {
       discountDescription: discountDescription || undefined,
       pending: pending || undefined,
       pendingDescription: pendingDescription || undefined,
-      total,
       receivedAmount: receivedAmount ? parseFloat(receivedAmount) : undefined,
+      total,
     };
 
     setCalculatedInvoice(invoice);
@@ -114,8 +115,22 @@ export default function RentCalculator() {
   const month = dateObj.getMonth() + 1; 
   const year = dateObj.getFullYear();
 
+
+  // Secure Store functions
+
+  async function save(key:string, value:any) {
+    const raw = await SecureStore.getItemAsync('invoices');
+    const invoices = raw ? JSON.parse(raw) : {};
+    invoices[key] = value;
+    await SecureStore.setItemAsync('invoices', JSON.stringify(invoices));
+  }
+
   const saveInvoice = () => {
     if (calculatedInvoice) {
+      const invoiceKey = `invoice_${Date.now()}`;
+      save(invoiceKey, JSON.stringify(calculatedInvoice));
+      // Clear calculated invoice after saving
+
       setCalculatedInvoice(null);
       // Reset form
       setRentAmt(tenant.monthlyRent);
@@ -413,7 +428,7 @@ ${currentReceivedAmount ? `Received: ₹${currentReceivedAmount.toFixed(2)}` : '
               <View>
                 <Text className="text-base font-semibold text-['#A69CAC'] mb-2">Pending</Text>
                 <TextInput
-                  value={pending.toString()}
+                  value={pending ? pending.toString() : ''}
                   onChangeText={setPending}
                   keyboardType="numeric"
                   placeholder="Amount"
@@ -459,7 +474,7 @@ ${currentReceivedAmount ? `Received: ₹${currentReceivedAmount.toFixed(2)}` : '
                 </Text>
                 <TextInput
                   value={receivedAmount}
-                  onChangeText={setReceivedAmount}
+                  onChangeText={(text) => {setReceivedAmount(text); calculateTotal();}}
                   keyboardType="numeric"
                   placeholder="0"
                   placeholderTextColor="#A69CAC"
@@ -472,10 +487,12 @@ ${currentReceivedAmount ? `Received: ₹${currentReceivedAmount.toFixed(2)}` : '
                 >
                 <Text className="text-white text-base font-semibold">Save Invoice</Text>
               </TouchableOpacity>
+
             </View>
           )}
       </View>
       </View>
+          <PreviousInvoices tenantName={name as string} />
       </KeyboardAwareScrollView>
       </View>
     </SafeAreaProvider>
